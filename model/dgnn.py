@@ -24,23 +24,49 @@ class DGNNConv(MessagePassing):
         init.xavier_normal_(self.w_self.weight)
         init.xavier_normal_(self.w_hist.weight)
 
-    def forward(self, x, edge_index, edge_weights, edge_times, node_time):
-        return self.propagate(edge_index, x=x, edge_weights=edge_weights,
-                              edge_times=edge_times, node_time=node_time)
+    def forward(self, x, edge_index, edge_weights, edge_times, node_time, node_ids):  # Added node_ids to forward arguments
+        # Aggregating both the messages and the position_info
+        aggr_out, aggr_position = self.propagate(edge_index, x=x, edge_weights=edge_weights,
+                                                 edge_times=edge_times, node_time=node_time, node_ids=node_ids)
+        return aggr_out, aggr_position
 
-    def message(self, x_j, edge_weights, edge_times, node_time):
+    def propagate(self, edge_index, size=None, **kwargs):
+        # Split the edge_index for source and target nodes
+        edge_index_i, edge_index_j = edge_index
+        
+        # Get messages
+        messages = self.message(**kwargs)
+
+        # Aggregate messages and position_info separately
+        out_message = self.aggregate(messages[0], edge_index_i, size=size)
+        out_position = self.aggregate(messages[1], edge_index_i, size=size)
+
+        # Use the update method to update node embeddings
+        out_message, out_position = self.update((out_message, out_position), **kwargs)
+
+        return out_message, out_position
+    
+    def message(self, x_j, edge_weights, edge_times, node_time, node_ids):  # Added node_ids to message arguments
         # Calculate z-score for edge_weights using nn.BatchNorm1d
         z_scored_weights = self.edge_weight_norm(edge_weights.unsqueeze(1)).squeeze(1)  # Modified for nn.BatchNorm1d
 
         # Calculate normalized kappa using softmax
         time_diffs = node_time.unsqueeze(-1) - edge_times
         normalized_kappa = F.softmax(-self.delta * time_diffs, dim=1)
+        
+        # Calculate the position information for each node
+        position_info = node_ids * torch.exp(torch.abs(time_diffs))
 
-        return z_scored_weights * normalized_kappa * x_j
+        return (z_scored_weights * normalized_kappa * x_j, position_info)
 
-    def update(self, aggr_out, x):
-        out = self.w_self(x) + self.w_hist(aggr_out)
-        return self.fc(out)
+    def update(self, aggr_out):
+        # Split the aggregated results
+        message_out, position_out = aggr_out
+
+        out = self.w_self(message_out) + self.w_hist(message_out)
+        out = self.fc(out)
+
+        return out, position_out
 
 
 class DGNN(nn.Module):
@@ -61,7 +87,7 @@ class DGNN(nn.Module):
         # Use NeighborSampler to sample a two-hop subgraph for the given node_ids
         sampler = NeighborSampler(edge_index, sizes=self.neighbor_sampler_sizes, num_nodes=graph.num_nodes, node_idx=node_ids, batch_size=len(node_ids))
 
-        outs = []
+        outs, positions = [], []
         for _, n_id, adjs in sampler:
             # For each node, filter edges based on its node_time
             node_specific_time = node_time[n_id[0]]
@@ -73,13 +99,14 @@ class DGNN(nn.Module):
             one_hop_indices, one_hop_e_id = adjs[0]
 
             # First message passing (2-hop to 1-hop)
-            inter_result = self.conv1(x[n_id], two_hop_indices, local_edge_weights[two_hop_e_id],
-                                      local_edge_times[two_hop_e_id], node_specific_time)
+            inter_result, inter_position = self.conv1(x[n_id], two_hop_indices, local_edge_weights[two_hop_e_id],
+                                                      local_edge_times[two_hop_e_id], node_specific_time, n_id)
             x[n_id] += inter_result
 
             # Second message passing (1-hop to target node)
-            out = self.conv2(x[n_id], one_hop_indices, local_edge_weights[one_hop_e_id],
-                             local_edge_times[one_hop_e_id], node_specific_time)
+            out, position = self.conv2(x[n_id], one_hop_indices, local_edge_weights[one_hop_e_id],
+                                       local_edge_times[one_hop_e_id], node_specific_time, n_id)
             outs.append(out)
+            positions.append(position)
 
-        return torch.cat(outs, dim=0)
+        return torch.cat(outs, dim=0), torch.cat(positions, dim=0)
