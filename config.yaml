@@ -1,0 +1,17 @@
+default:
+  raw_data_path: ".data/raw"
+  processed_data_path: ".data/processed"
+
+datasets:
+  wiki:
+    dataset: 'wiki'
+
+  yelp:
+    dataset: 'yelp'
+
+models:
+  dgnn:
+    model: 'dgnn'
+    lr: 1e-3
+    dgnn_hidden_dim: 128
+    dgnn_output_dim: 128
