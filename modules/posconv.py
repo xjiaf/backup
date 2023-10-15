@@ -16,7 +16,7 @@ class POSConv(MessagePassing):
     def __init__(self, in_channels: Optional[Union[int, float]],
                  out_channels: Optional[Union[int, float]],
                  aggr: Optional[Union[str, List[str], Aggregation]] = "add"):
-        super(DGNConv, self).__init__(aggr=aggr)  # "Add" aggregation
+        super(POSConv, self).__init__(aggr=aggr)  # "Add" aggregation
         self.delta = Parameter(torch.tensor(1.0))
         self.bn = nn.BatchNorm1d(1, affine=True)  # Added for edge weights normalization
         self.w_self = Linear(in_channels, out_channels)
