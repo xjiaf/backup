@@ -12,7 +12,7 @@ from torch_geometric.typing import (
 )
 
 
-class DGNConv(MessagePassing):
+class POSConv(MessagePassing):
     def __init__(self, in_channels: Optional[Union[int, float]],
                  out_channels: Optional[Union[int, float]],
                  aggr: Optional[Union[str, List[str], Aggregation]] = "add"):
@@ -68,7 +68,7 @@ class DGNConv(MessagePassing):
             feat = kappa_time_diff * mask * x_j
         
         # Calculate position info
-        step = 2
+        step = torch.tensor(2.0)
         position = (position) * step * torch.exp(-time_diff) * mask
         return feat, position
 
