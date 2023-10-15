@@ -58,7 +58,7 @@ def get_params(args, config):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Training and Testing TGSL.")
-    parser.add_argument('--dataset', type=str, choices=['yelp', 'huawei'],
+    parser.add_argument('--dataset', type=str, choices=['yelp', 'wiki'],
                         default='yelp', help='Which dataset to use.')
     parser.add_argument('--mode', type=str,
                         choices=['train', 'test'], default='train')

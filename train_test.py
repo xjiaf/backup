@@ -1,12 +1,10 @@
-trainer怎么样
 import torch
 from torch import nn, optim
 from torch_geometric.loader import LinkLoader, LinkNeighborLoader
 from torch_geometric.sampler import NegativeSampling
 
-from model.dgdcn import DGDCN
 from model.dgnn import DGNN
-from datasets.temporal_graph import TemporalGraph
+from dataset.temporal_graph import TemporalGraph
 from utils.early_stopping import EarlyStopping
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -21,7 +19,7 @@ class Trainer:
         x_path = (params['processed_data_path'] / params[
             'dataset'] / params['x_file'])
         self.graph = TemporalGraph(edge=origin_edge_path,
-                                    x=x_path, directed=params['directed'])
+                                   x=x_path, directed=params['directed'])
 
         # Initialize
         self.model = self.init_model().to(device)
@@ -35,12 +33,7 @@ class Trainer:
 
     def init_model(self):
         """Initialize the model"""
-        if self.params['model'] == 'dgdcn':
-            linear_feature_columns = self.params['linear_feature_columns']
-            dnn_feature_columns = self.params['dnn_feature_columns']
-            model = DGDCN(self.params, self.graph.num_node_features,
-                          linear_feature_columns, dnn_feature_columns)
-        elif self.params['model'] == 'dgnn':
+        if self.params['model'] == 'dgnn':
             model = model = DGNN(self.params,
                                  self.graph.num_node_features,
                                  self.params['out_channels'])
@@ -124,7 +117,7 @@ class Trainer:
             self.node_emb[batch.n_id] = self.model(batch.x,
                                                    batch.edge_index,
                                                    batch.edge_time,
-                                                   batch.node_time,
+                                                   batch.edge_time,
                                                    batch.edge_weight)
             loss = self.criterion(self.node_emb[batch.src_index],
                                   self.node_emb[batch.dst_pos_index],

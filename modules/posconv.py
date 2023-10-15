@@ -1,9 +1,15 @@
+from typing import List, Optional, Union
+
 import torch
-from torch import nn
+from torch import nn, Tensor
 import torch.nn.functional as F
 from torch.nn import init, Parameter, Linear
 from torch_geometric.nn.conv import MessagePassing
-from torch_geometric.loader import NeighborSampler
+from torch_geometric.nn.aggr import Aggregation
+from torch_geometric.typing import (
+    Adj,
+    OptTensor,
+)
 
 
 class DGNNConv(MessagePassing):
