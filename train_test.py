@@ -25,15 +25,19 @@ class Trainer:
         self.model = self.init_model().to(device)
         self.optimizer = optim.Adam([{'params': self.model.parameters()}],
                                     lr=params['lr'],
-                                    weight_decay=params[
-                                        'weight_decay']).to(device)
+                                    weight_decay=params['weight_decay'])
         self.criterion = self.model.criterion.to(device)
-
         self.model.train()
 
     def init_model(self):
         """Initialize the model"""
-        if self.params['model'] == 'dgnn':
+        print('init model:', self.params['model'])
+        if self.params['model'] == 'dgdcn':
+            linear_feature_columns = self.params['linear_feature_columns']
+            dnn_feature_columns = self.params['dnn_feature_columns']
+            model = DGDCN(self.params, self.graph.num_node_features,
+                          linear_feature_columns, dnn_feature_columns)
+        elif self.params['model'] == 'dgnn':
             model = model = DGNN(self.params,
                                  self.graph.num_node_features,
                                  self.params['out_channels'])
@@ -44,9 +48,11 @@ class Trainer:
         return model
 
     def get_train_loader(self):
+        print("get dataloader:", self.params['loader'])
         if self.params['model'] == 'dgnn':
             if self.params['loader'] == 'LinkNeighborLoader':
                 loader = LinkNeighborLoader(data=self.graph,
+                                            edge_label_index=self.graph.edge_index,
                                             batch_size=self.params['batch_size'],
                                             num_neighbors=self.params[
                                                 'num_neighbors'],
@@ -58,8 +64,8 @@ class Trainer:
                                                 'neg_sampling_ratio'],
                                             num_workers=self.params['num_workers'],
                                             edge_label_time=self.graph.edge_time,
-                                            time_attr='edge_time',
-                                            weight_attr='edge_weight')
+                                            time_attr='edge_time')
+                                            # weight_attr='edge_weight')
 
             elif self.params['loader'] == 'LinkLoader':
                 loader = LinkLoader(data=self.graph,
@@ -85,8 +91,11 @@ class Trainer:
                 'patience'], verbose=True, path=ckpt_path)
 
         if self.params['model'] == 'dgnn':
-            self.node_emb = torch.zeros_like((self.graph.num_nodes,
-                                              self.params['out_channels']))
+            # self.node_emb = torch.zeros_like((self.graph.num_nodes,
+            #                                   self.params['out_channels']))
+            self.node_emb_dict = {}
+            # self.node_emb = self.node_emb.to(device)
+        print("start training")
         for epoch_idx in range(epoch_num):
             for batch_idx, batch in enumerate(loader):
                 batch = batch.to(device)
@@ -114,11 +123,14 @@ class Trainer:
     def model_forward(self, batch):
         batch = batch.to(device)
         if self.params['model'] == 'dgnn':
-            self.node_emb[batch.n_id] = self.model(batch.x,
-                                                   batch.edge_index,
-                                                   batch.edge_time,
-                                                   batch.edge_time,
-                                                   batch.edge_weight)
+            node_emb = self.model(batch.x,
+                                  batch.edge_index,
+                                  batch.edge_time,
+                                  batch.edge_time,
+                                  batch.edge_weight)
+            for sn, et, se in zip(batch.n_id.flatten(), batch.edge_time.flatten(), node_emb):
+                self.node_emb_dict[(sn, et)] = se
+
             loss = self.criterion(self.node_emb[batch.src_index],
                                   self.node_emb[batch.dst_pos_index],
                                   self.node_emb[batch.dst_neg_index])
