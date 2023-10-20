@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from modules.dgnconv import DGNConv
+from module.dgnconv import DGNConv
 
 
 class DGNN(nn.Module):

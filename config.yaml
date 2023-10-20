@@ -1,10 +1,16 @@
 default:
   raw_data_path: ".data/raw"
   processed_data_path: ".data/processed"
+  edge_attr_path: "edge_attr.pt"
+  x_path: "x.pt"
+  edge_path: "edge.pt"
 
 datasets:
   wiki:
     dataset: 'wiki'
+    edge_path: 'ml_wikipedia.npy'
+    x_path: 'ml_wikipedia_node.npy'
+
 
   yelp:
     dataset: 'yelp'
