@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import torch
 from torch import nn, optim
 from torch_geometric.loader import LinkLoader, LinkNeighborLoader
@@ -14,20 +16,39 @@ class Dataset:
     def __init__(self, params):
         self.params = params
         # Load graph
-        origin_edge_path = (params['processed_data_path'] / params[
-            'dataset'] / params['origin_edge_file'])
+
         x_path = (params['processed_data_path'] / params[
             'dataset'] / params['x_file'])
-        self.graph = TemporalGraph(edge=origin_edge_path,
-                                   x=x_path, directed=params['directed'])
-
-        self.train, self.test = self.train_test_split()
+        x = torch.load(x_path)
+        train_edge, test_edge = self.train_test_split()
+        self.train = TemporalGraph(x=x, edge=train_edge)
+        self.test = TemporalGraph(x=x, edge=test_edge)
 
         # for induction
 
+    def train_test_split(self, test_size=0.2):
+        # 加载并排序数据
+        edge_path = Path(self.params['processed_data_path'],
+                         self.params['dataset'],
+                         self.params['edge_path'])
+        edge_index = torch.load(edge_path)
+        sorted_edge_index = edge_index[torch.argsort(edge_index[:, 2])]
 
-    def train_test_split(self):
-        pass
+        # 划分训练和测试集
+        train_size = int((1-test_size) * sorted_edge_index.shape[0])
+        train_edges, test_edges = sorted_edge_index.split([train_size, len(sorted_edge_index) - train_size])
+
+        # 获取训练数据中的节点
+        train_nodes_set = set(train_edges[:, :2].flatten().tolist())
+
+        # 使用集合运算快速分类测试边
+        is_transductive = [src in train_nodes_set and dst in train_nodes_set for src, dst, _ in test_edges]
+        transductive_mask = torch.tensor(is_transductive)
+        inductive_mask = ~transductive_mask
+
+        transductive_edges = test_edges[transductive_mask]
+        inductive_edges = test_edges[inductive_mask]
+
 
     def get_train_loader(self):
         print("get dataloader:", self.params['loader'])
