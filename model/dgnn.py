@@ -18,7 +18,8 @@ class DGNN(nn.Module):
                                 nn.Dropout(params['dropout'])
                                 )
 
-    def forward(self, x, edge_index, edge_time, node_time, edge_weight=None) -> torch.Tensor:
+    def forward(self, x, edge_index, edge_time, node_time,
+                edge_weight=None, edge_attr=None) -> torch.Tensor:
         node_emb = self.conv1(x=x, edge_index=edge_index, edge_time=edge_time,
                               node_time=node_time, edge_weight=edge_weight)
 

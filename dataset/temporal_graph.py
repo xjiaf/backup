@@ -13,7 +13,7 @@ from torch_geometric.data import Data
 
 
 class TemporalGraph(Data):
-    def __init__(self, edge=None, x=None, directed=False, **kwargs):
+    def __init__(self, edge=None, x=None, edge_attr=None, directed=True, **kwargs):
         """
         Parameters:
         - edge : the edge data file_path or np/tensor object.
@@ -56,21 +56,23 @@ class TemporalGraph(Data):
         if x is not None:
             self.x = self._load_node_features(x)
 
+        if edge_attr is not None:
+            self.edge_attr = self._adaptive_load(edge_attr)
+
         # self.directed = directed
         self.neighbor_sequence = defaultdict(list)
         self.stream_graph = {}  # stream graph data
-
-        # update neighbor_sequence and stream_graph
-        self.update_further_graph(self.edge_index, self.edge_time, self.edge_weight)
 
     def process_edge(self, edge_data: Tensor) -> (Tensor, Tensor, Tensor):
         edge_tuple = self._load_edge(edge_data)
         if not self.directed:
             edge_tuple = to_undirected(*edge_tuple)
-        return remove_duplicate_edges(*edge_tuple)
+            return remove_duplicate_edges(*edge_tuple)
+        else:
+            return edge_tuple
 
-    def update_further_graph(self, new_edge_index: Tensor,
-                             new_edge_time: Tensor, new_edge_weight=None):
+    def update_further_graph(self, new_edge_index: Tensor = None,
+                             new_edge_time: Tensor = None, new_edge_weight=None):
         """
         Update the TemporalGraph with new edges, timestamps, and weights.
 
@@ -89,6 +91,9 @@ class TemporalGraph(Data):
                 edges in a temporal order.
         """
         # Determine the iterators based on the presence of new_edge_weight
+        if not (new_edge_index and new_edge_time):
+            new_edge_index, new_edge_time, new_edge_weight = self.edge_index, self.edge_time, self.edge_weight
+
         iterables = [new_edge_index[0], new_edge_index[1], new_edge_time]
         if new_edge_weight is not None:
             iterables.append(new_edge_weight)
