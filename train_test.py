@@ -10,8 +10,8 @@ from utils.early_stopping import EarlyStopping
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-class Trainer:
-    def __init__(self, params, device=device):
+class Dataset:
+    def __init__(self, params):
         self.params = params
         # Load graph
         origin_edge_path = (params['processed_data_path'] / params[
@@ -21,38 +21,20 @@ class Trainer:
         self.graph = TemporalGraph(edge=origin_edge_path,
                                    x=x_path, directed=params['directed'])
 
-        # Initialize
-        self.model = self.init_model().to(device)
-        self.optimizer = optim.Adam([{'params': self.model.parameters()}],
-                                    lr=params['lr'],
-                                    weight_decay=params['weight_decay'])
-        self.criterion = self.model.criterion.to(device)
-        self.model.train()
+        self.train, self.test = self.train_test_split()
 
-    def init_model(self):
-        """Initialize the model"""
-        print('init model:', self.params['model'])
-        if self.params['model'] == 'dgdcn':
-            linear_feature_columns = self.params['linear_feature_columns']
-            dnn_feature_columns = self.params['dnn_feature_columns']
-            model = DGDCN(self.params, self.graph.num_node_features,
-                          linear_feature_columns, dnn_feature_columns)
-        elif self.params['model'] == 'dgnn':
-            model = model = DGNN(self.params,
-                                 self.graph.num_node_features,
-                                 self.params['out_channels'])
+        # for induction
 
-        # if pytorch version >= 2.0.0 and cuda is available
-        if (int(torch.__version__.split('.')[0]) >= 2) and torch.cuda.is_available():
-            model = torch.compile(model)  # pytorch compile to accelerate
-        return model
+
+    def train_test_split(self):
+        pass
 
     def get_train_loader(self):
         print("get dataloader:", self.params['loader'])
         if self.params['model'] == 'dgnn':
             if self.params['loader'] == 'LinkNeighborLoader':
-                loader = LinkNeighborLoader(data=self.graph,
-                                            edge_label_index=self.graph.edge_index,
+                loader = LinkNeighborLoader(data=self.train,
+                                            edge_label_index=self.train.edge_index,
                                             batch_size=self.params['batch_size'],
                                             num_neighbors=self.params[
                                                 'num_neighbors'],
@@ -63,12 +45,11 @@ class Trainer:
                                             neg_sampling_ratio=self.params[
                                                 'neg_sampling_ratio'],
                                             num_workers=self.params['num_workers'],
-                                            edge_label_time=self.graph.edge_time,
+                                            edge_label_time=self.train.edge_time,
                                             time_attr='edge_time')
-                                            # weight_attr='edge_weight')
 
             elif self.params['loader'] == 'LinkLoader':
-                loader = LinkLoader(data=self.graph,
+                loader = LinkLoader(data=self.train,
                                     shuffle=self.params['shuffle'],
                                     neg_sampling=NegativeSampling(
                                         mode='triplet'),
@@ -76,12 +57,42 @@ class Trainer:
                                     neg_sampling_ratio=self.params[
                                         'neg_sampling_ratio'],
                                     num_workers=self.params['num_workers'],
-                                    edge_label_time=self.graph.edge_time,
+                                    edge_label_time=self.train.edge_time,
                                     time_attr='edge_time')
         return loader
 
+    def get_test_loader(self):
+        pass
+
+
+class Trainer:
+    def __init__(self, params: dict, data: Dataset, device=device):
+        self.params = params
+        # Initialize
+        self.data = data
+        self.graph = data.train
+        self.model = self.init_model().to(device)
+        self.optimizer = optim.Adam([{'params': self.model.parameters()}],
+                                    lr=params['lr'],
+                                    weight_decay=params['weight_decay'])
+        self.criterion = self.model.criterion.to(device)
+        self.model.train()
+
+    def init_model(self):
+        """Initialize the model"""
+        print('init model:', self.params['model'])
+        if self.params['model'] == 'dgnn':
+            model = model = DGNN(self.params,
+                                 self.graph.num_node_features,
+                                 self.params['out_channels'])
+
+        # if pytorch version >= 2.0.0 and cuda is available
+        if (int(torch.__version__.split('.')[0]) >= 2) and torch.cuda.is_available():
+            model = torch.compile(model)  # pytorch compile to accelerate
+        return model
+
     def train(self, epoch_num=None, is_early_stopping=True):
-        loader = self.get_train_loader()
+        loader = self.data.get_train_loader()
         if epoch_num is None:
             epoch_num = self.params['epoch_num']
         if is_early_stopping:
@@ -138,8 +149,18 @@ class Trainer:
 
 
 class Tester:
-    def __init__(self, params, device=device):
-        pass
-        # model.eval()
+    def __init__(self, params: dict, data: Dataset, device=device):
+        self.params = params
+
+        self.data = data
+        self.graph = data.train
+        self.model = self.init_model().to(device)
+        self.optimizer = optim.Adam([{'params': self.model.parameters()}],
+                                    lr=params['lr'],
+                                    weight_decay=params['weight_decay'])
+        self.criterion = self.model.criterion.to(device)
+        self.model.eval()
+
+    def test(self):
         with torch.no_grad():
             pass

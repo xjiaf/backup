@@ -7,29 +7,30 @@ from dataset.wiki.loader import WikiLoader
 
 
 def process_data(params: dict):
+    """
+    This function is used to process the data and generate the graph.
+    """
     edge_file = Path(
-        params['processed_data_path'], params['dataset'], params['edge_path'])
+        params['processed_data_path'],
+        params['dataset'], params['edge_path'])
     x_file = Path(
-        params['processed_data_path'], params['dataset'], params['x_path'])
-    edge_attr_file = Path(
-        params['processed_data_path'], params['dataset'], params['edge_attr_path'])
+        params['processed_data_path'],
+        params['dataset'], params['x_path'])
     edge_file.parent.mkdir(parents=True, exist_ok=True)
-    # Load user behavior seq and construct graph
-    # if edge_file.exists() and x_file.exists() and edge_attr_file.exists():
-    #     print("{0} graph already exists, skip".format(params['dataset']))
-    # else:
-    print("start to process {0} data and generate graph".format(
-        params['dataset']))
 
+    print("start to process {0} data"
+          "and generate graph".format(params['dataset']))
+    # Create the data loader according to the dataset
     if params['dataset'] == 'wiki':
         loader = WikiLoader(params=params)
 
-    x, edge, edge_attr = loader.process_data()
+    # Process the data and generate the graph
+    x, edge = loader.process_data()
     print("finished {0} graph constructiong".format(params['dataset']))
-    # 4. Save the created tensors as `.pt` files
+    
+    # Save the graph
     torch.save(x, x_file)
     torch.save(edge, edge_file)
-    torch.save(edge_attr, edge_attr_file)
     print("finished saving {0} graph".format(params['dataset']))
 
 
