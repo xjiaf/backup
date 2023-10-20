@@ -242,8 +242,7 @@ def remove_duplicate_edges(edge_index: Tensor, edge_time: Tensor,
 
     # Update the edge attributes based on unique indices
     edge_index = edge_index[:, unique_indices]
-    if edge_time is not None:
-        edge_time = edge_time[unique_indices]
+    edge_time = edge_time[unique_indices]
     if edge_attr is not None:
         if edge_attr.dim() == 1:
             edge_attr = edge_attr[unique_indices]
