@@ -21,7 +21,8 @@ class TemporalGraph(Data):
             Expected format of loaded data is a 2D array where
             each row represents an edge with columns:
             [source_node_id (long), target_node_id (long),
-                    time_stamp (long), edge_weight (float)/edge_attr(tensor float)].
+                    time_stamp (long), edge_weight (float)
+                    /edge_attr(tensor float)].
 
         - x: Path to the node feature file or np/tensor object.
             Expected format of loaded data is a 2D array
@@ -52,7 +53,8 @@ class TemporalGraph(Data):
 
         # Load and process data
         if edge is not None:
-            self.edge_index, self.edge_time, self.edge_attr = self.process_edge(edge)
+            (self.edge_index, self.edge_time,
+             self.edge_attr) = self.process_edge(edge)
 
         if x is not None:
             self.x = self._load_node_features(x)
@@ -90,7 +92,9 @@ class TemporalGraph(Data):
         """
         # Determine the iterators based on the presence of new_edge_attr
         if not (new_edge_index and new_edge_time):
-            new_edge_index, new_edge_time, new_edge_attr = self.edge_index, self.edge_time, self.edge_attr
+            new_edge_index = self.edge_index
+            new_edge_time = self.edge_time
+            new_edge_attr = self.edge_attr
 
         iterables = [new_edge_index[0], new_edge_index[1], new_edge_time]
         if new_edge_attr is not None:
@@ -102,11 +106,13 @@ class TemporalGraph(Data):
 
             # Update the neighbor sequence
             if edge_attr is None:
-                self.neighbor_sequence.setdefault(source_node.item(), []).append((
-                    target_node.item(), time_stamp.item()))
+                self.neighbor_sequence.setdefault(
+                    source_node.item(), []).append(
+                        (target_node.item(), time_stamp.item()))
             else:
-                self.neighbor_sequence.setdefault(source_node.item(), []).append((
-                    target_node.item(), time_stamp.item(), edge_attr))
+                self.neighbor_sequence.setdefault(
+                    source_node.item(), []).append(
+                        (target_node.item(), time_stamp.item(), edge_attr))
 
             # Update the stream graph
             if source_node not in self.stream_graph:
@@ -123,7 +129,8 @@ class TemporalGraph(Data):
             if edge_attr is None:
                 self.stream_graph[source_node][time_stamp].append(target_node)
             else:
-                self.stream_graph[source_node][time_stamp].append((target_node, edge_attr))
+                self.stream_graph[source_node][time_stamp].append(
+                    (target_node, edge_attr))
 
         # Sort the neighbor sequence
         for source_node, hist in self.neighbor_sequence.items():
@@ -138,14 +145,17 @@ class TemporalGraph(Data):
             new edge_index, new_edge_time and new_edge_attr tensors.
         """
         if new_edge is not None:
-            new_edge_index, new_edge_time, new_edge_attr = self.process_edge(new_edge)
+            new_edge_index, new_edge_time, new_edge_attr = self.process_edge(
+                new_edge)
 
         # Append the new_edge_index to the existing edge_index
         edge_index = torch.cat([self.edge_index, new_edge_index], dim=1)
         edge_time = torch.cat([self.edge_time, new_edge_time])
-        edge_attr = torch.cat([self.edge_attr, new_edge_attr]) if new_edge_attr else None
+        edge_attr = torch.cat(
+            [self.edge_attr, new_edge_attr]) if new_edge_attr else None
 
-        self.edge_index, self.edge_time, self.edge_attr = remove_duplicate_edges(
+        (self.edge_index, self.edge_time,
+         self.edge_attr) = remove_duplicate_edges(
             edge_index, edge_time, edge_attr)
         self.update_further_graph(new_edge_index, new_edge_time, new_edge_attr)
 
@@ -188,10 +198,12 @@ class TemporalGraph(Data):
             number of columns in the file:
         - 1 and 2 columns: Assumes edge indices.
         - 3 columns: Assumes edge indices followed by timestamps.
-        - 4 column and after: Assumes edge indices followed by weights or edge attributes.
+        - 4 column and after: Assumes edge indices followed
+            by weights or edge attributes.
 
         Args:
-        - edge (str or tensor): Path or edge tensor to the file containing edge data.
+        - edge (str or tensor): Path or edge tensor to
+            the file containing edge data.
 
         Returns:
         - edge_index (Tensor): Edge indices.
@@ -203,7 +215,7 @@ class TemporalGraph(Data):
         print('loading edge data...')
         edge_data = self._adaptive_load(edge) if isinstance(
             edge, (str, Path)) else Tensor(edge)
-        if edge_data.shape[1] < 3:  # minimum columns required: source, target, time
+        if edge_data.shape[1] < 3:  # source, target, time
             raise ValueError("The edge data must have at"
                              "least 3 columns: source, target, and time.")
 
@@ -220,25 +232,30 @@ class TemporalGraph(Data):
         return edge_index, edge_time, edge_attr
 
 
-def remove_duplicate_edges(edge_index: Tensor, edge_time: Tensor,
-                           edge_attr: Tensor = None) -> (Tensor, Tensor, Tensor):
+def remove_duplicate_edges(edge_index: Tensor,
+                           edge_time: Tensor,
+                           edge_attr: Tensor = None) -> (
+                               Tensor, Tensor, Tensor):
     """
     Remove duplicate edges from the given
         edge_index, edge_time, and edge_attr.
     """
     # Create a unique hash for each edge based on its attributes
     # combine edge_index, edge_time and edge_attr
-    combined_tensor = torch.cat([edge_index.t().float(), edge_time.unsqueeze(-1)], dim=1)
+    combined_tensor = torch.cat(
+        [edge_index.t().float(), edge_time.unsqueeze(-1)], dim=1)
     if edge_attr is not None:
         # Ensure that the number of edges and edge attributes are the same
         assert edge_index.shape[1] == edge_attr.shape[0]
-        combined_tensor = torch.cat([combined_tensor, edge_attr.unsqueeze(-1)], dim=1)
+        combined_tensor = torch.cat(
+            [combined_tensor, edge_attr.unsqueeze(-1)], dim=1)
 
     # Get the hashes for each row
     hashes = [tensor_to_hashes(row) for row in combined_tensor]
 
     # Get the unique indices based on the hashes
-    _, unique_indices = torch.unique(torch.tensor(hashes), return_inverse=True)
+    _, unique_indices = torch.unique(
+        torch.tensor(hashes), return_inverse=True)
 
     # Update the edge attributes based on unique indices
     edge_index = edge_index[:, unique_indices]
