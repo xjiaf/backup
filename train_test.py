@@ -36,50 +36,53 @@ class Dataset:
 
         # 划分训练和测试集
         train_size = int((1-test_size) * sorted_edge_index.shape[0])
-        train_edges, test_edges = sorted_edge_index.split([train_size, len(sorted_edge_index) - train_size])
+        train_edges, test_edges = sorted_edge_index.split(
+            [train_size, len(sorted_edge_index) - train_size])
 
         # 获取训练数据中的节点
         train_nodes_set = set(train_edges[:, :2].flatten().tolist())
 
         # 使用集合运算快速分类测试边
-        is_transductive = [src in train_nodes_set and dst in train_nodes_set for src, dst, _ in test_edges]
+        is_transductive = [src in train_nodes_set and dst in
+                           train_nodes_set for src, dst, _ in test_edges]
         transductive_mask = torch.tensor(is_transductive)
         inductive_mask = ~transductive_mask
 
         transductive_edges = test_edges[transductive_mask]
         inductive_edges = test_edges[inductive_mask]
 
-
     def get_train_loader(self):
         print("get dataloader:", self.params['loader'])
         if self.params['model'] == 'dgnn':
             if self.params['loader'] == 'LinkNeighborLoader':
-                loader = LinkNeighborLoader(data=self.train,
-                                            edge_label_index=self.train.edge_index,
-                                            batch_size=self.params['batch_size'],
-                                            num_neighbors=self.params[
-                                                'num_neighbors'],
-                                            neg_sampling=NegativeSampling(
-                                                mode='triplet'),
-                                            temporal_strategy='uniform',
-                                            shuffle=self.params['shuffle'],
-                                            neg_sampling_ratio=self.params[
-                                                'neg_sampling_ratio'],
-                                            num_workers=self.params['num_workers'],
-                                            edge_label_time=self.train.edge_time,
-                                            time_attr='edge_time')
+                loader = LinkNeighborLoader(
+                    data=self.train,
+                    edge_label_index=self.train.edge_index,
+                    batch_size=self.params['batch_size'],
+                    num_neighbors=self.params[
+                        'num_neighbors'],
+                    neg_sampling=NegativeSampling(
+                        mode='triplet'),
+                    temporal_strategy='uniform',
+                    shuffle=self.params['shuffle'],
+                    neg_sampling_ratio=self.params[
+                        'neg_sampling_ratio'],
+                    num_workers=self.params['num_workers'],
+                    edge_label_time=self.train.edge_time,
+                    time_attr='edge_time')
 
             elif self.params['loader'] == 'LinkLoader':
-                loader = LinkLoader(data=self.train,
-                                    shuffle=self.params['shuffle'],
-                                    neg_sampling=NegativeSampling(
-                                        mode='triplet'),
-                                    batch_size=self.params['batch_size'],
-                                    neg_sampling_ratio=self.params[
-                                        'neg_sampling_ratio'],
-                                    num_workers=self.params['num_workers'],
-                                    edge_label_time=self.train.edge_time,
-                                    time_attr='edge_time')
+                loader = LinkLoader(
+                    data=self.train,
+                    shuffle=self.params['shuffle'],
+                    neg_sampling=NegativeSampling(
+                        mode='triplet'),
+                    batch_size=self.params['batch_size'],
+                    neg_sampling_ratio=self.params[
+                        'neg_sampling_ratio'],
+                    num_workers=self.params['num_workers'],
+                    edge_label_time=self.train.edge_time,
+                    time_attr='edge_time')
         return loader
 
     def get_test_loader(self):
@@ -108,7 +111,8 @@ class Trainer:
                                  self.params['out_channels'])
 
         # if pytorch version >= 2.0.0 and cuda is available
-        if (int(torch.__version__.split('.')[0]) >= 2) and torch.cuda.is_available():
+        if ((int(torch.__version__.split('.')[0]) >= 2) and
+                torch.cuda.is_available()):
             model = torch.compile(model)  # pytorch compile to accelerate
         return model
 
@@ -150,7 +154,8 @@ class Trainer:
                         break
 
         if self.params['model'] == 'dgnn':
-            return self.node_emb.cpu().detach().clone(), loss.cpu().detach().clone()
+            return (self.node_emb.cpu().detach().clone(),
+                    loss.cpu().detach().clone())
 
     def model_forward(self, batch):
         batch = batch.to(device)
@@ -160,7 +165,9 @@ class Trainer:
                                   batch.edge_time,
                                   batch.edge_time,
                                   batch.edge_weight)
-            for sn, et, se in zip(batch.n_id.flatten(), batch.edge_time.flatten(), node_emb):
+            for sn, et, se in zip(batch.n_id.flatten(),
+                                  batch.edge_time.flatten(),
+                                  node_emb):
                 self.node_emb_dict[(sn, et)] = se
 
             loss = self.criterion(self.node_emb[batch.src_index],
@@ -185,3 +192,9 @@ class Tester:
     def test(self):
         with torch.no_grad():
             pass
+
+    def load_model(self):
+        pass
+
+    def metric(self):
+        pass

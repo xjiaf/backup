@@ -48,8 +48,9 @@ class TemporalGraph(Data):
                 time_2: [(neighbor_node_b, edge_attr_b), ...], ...}, ...}.
         """
         # Call base class init
-        super().__init__(directed=directed, edge_time=None, edge_attr=None,
-                         neighbor_sequence=None, stream_graph=None, **kwargs)
+        super().__init__(directed=directed, edge_time=None,
+                         edge_attr=None, neighbor_sequence=defaultdict(list),
+                         stream_graph={}, **kwargs)
 
         # Load and process data
         if edge is not None:
@@ -59,9 +60,7 @@ class TemporalGraph(Data):
         if x is not None:
             self.x = self._load_node_features(x)
 
-        # self.directed = directed
-        self.neighbor_sequence = defaultdict(list)
-        self.stream_graph = {}  # stream graph data
+        self.pos = torch.arange(self.num_nodes).float()
 
     def process_edge(self, edge_data: Tensor) -> (Tensor, Tensor, Tensor):
         edge_tuple = self._load_edge(edge_data)

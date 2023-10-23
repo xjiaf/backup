@@ -18,7 +18,7 @@ class POSConv(MessagePassing):
                  aggr: Optional[Union[str, List[str], Aggregation]] = "add"):
         super(POSConv, self).__init__(aggr=aggr)  # "Add" aggregation
         self.delta = Parameter(torch.tensor(1.0))
-        self.bn = nn.BatchNorm1d(1, affine=True)  # Added for edge weights normalization
+        self.bn = nn.BatchNorm1d(1, affine=True)  # edge weights normalization
         self.w_self = Linear(in_channels, out_channels)
         self.w_hist = Linear(in_channels, out_channels)
 
@@ -40,8 +40,10 @@ class POSConv(MessagePassing):
         Returns:
             out: Output features, size [num_nodes, out_channels]
         """
-        if torch.is_tensor(node_time) and node_time.dim() == 0 or not torch.is_tensor(node_time):
-            node_time = torch.full_like(edge_time, node_time, dtype=torch.float)
+        if torch.is_tensor(node_time) and node_time.dim() == 0 \
+                or not torch.is_tensor(node_time):
+            node_time = torch.full_like(edge_time, node_time,
+                                        dtype=torch.float)
         out = self.propagate(edge_index, x=x, edge_weight=edge_weight,
                              edge_time=edge_time, node_time=node_time)
         return out
@@ -56,7 +58,8 @@ class POSConv(MessagePassing):
         # Normalize edge weights
         if edge_weight is not None:
             normalized_edge_weight = torch.zeros_like(edge_time)
-            normalized_edge_weight[mask] = self.bn(edge_weight[mask].unsqueeze(1)).squeeze(1)
+            normalized_edge_weight[mask] = self.bn(
+                edge_weight[mask].unsqueeze(1)).squeeze(1)
 
         # Only calculate time decay for the valid time_diffs
         kappa_time_diff = torch.zeros_like(time_diff)
@@ -66,7 +69,7 @@ class POSConv(MessagePassing):
             feat = normalized_edge_weight * kappa_time_diff * mask * x_j
         else:
             feat = kappa_time_diff * mask * x_j
-        
+
         # Calculate position info
         step = torch.tensor(2.0)
         position = (position) * step * torch.exp(-time_diff) * mask

@@ -2,7 +2,6 @@ from typing import List, Optional, Union
 
 import torch
 from torch import nn, Tensor
-import torch.nn.functional as F
 from torch.nn import init, Linear
 from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.nn.aggr import Aggregation
@@ -17,7 +16,7 @@ class DGNConv(MessagePassing):
                  out_channels: Optional[Union[int, float]],
                  aggr: Optional[Union[str, List[str], Aggregation]] = "add"):
         super(DGNConv, self).__init__(aggr=aggr)  # "Add" aggregation
-        self.bn = nn.BatchNorm1d(1, affine=True)  # Added for edge weights normalization
+        self.bn = nn.BatchNorm1d(1, affine=True)  # edge weights normalized
         self.w_self = Linear(in_channels, out_channels)
         self.w_hist = Linear(in_channels, out_channels)
 
@@ -38,8 +37,10 @@ class DGNConv(MessagePassing):
         Returns:
             out: Output features, size [num_nodes, out_channels]
         """
-        if torch.is_tensor(node_time) and node_time.dim() == 0 or not torch.is_tensor(node_time):
-            node_time = torch.full_like(edge_time, node_time, dtype=torch.float)
+        if torch.is_tensor(node_time) and node_time.dim() == 0 \
+                or not torch.is_tensor(node_time):
+            node_time = torch.full_like(
+                edge_time, node_time, dtype=torch.float)
         out = self.propagate(edge_index, x=x, edge_weight=edge_weight,
                              edge_time=edge_time, node_time=node_time)
         return out
@@ -51,7 +52,8 @@ class DGNConv(MessagePassing):
         # Normalize edge weights
         if edge_weight is not None:
             normalized_edge_weight = torch.zeros_like(edge_time)
-            normalized_edge_weight[mask] = self.bn(edge_weight[mask].unsqueeze(1)).squeeze(1)
+            normalized_edge_weight[mask] = self.bn(
+                edge_weight[mask].unsqueeze(1)).squeeze(1)
 
         if edge_weight is not None:
             feat = normalized_edge_weight * mask * x_j

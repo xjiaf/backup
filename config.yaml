@@ -19,3 +19,6 @@ models:
     lr: 1e-3
     dgnn_hidden_dim: 128
     dgnn_output_dim: 128
+
+  pdgnn:
+    model: 'pdgnn'
