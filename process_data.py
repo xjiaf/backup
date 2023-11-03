@@ -27,7 +27,7 @@ def process_data(params: dict):
     # Process the data and generate the graph
     x, edge = loader.process_data()
     print("finished {0} graph constructiong".format(params['dataset']))
-    
+
     # Save the graph
     torch.save(x, x_file)
     torch.save(edge, edge_file)

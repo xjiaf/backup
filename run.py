@@ -1,30 +1,106 @@
 import random
 import argparse
 import yaml
+import logging
 from pathlib import Path
 import numpy as np
+import pandas as pd
 import torch
-
-from train_test import Trainer
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
+def setup_logging(save_path, log_level=logging.INFO):
+    """
+    Set up logging to file and console.
+    """
+    # Create the directory if it does not exist
+    Path(save_path).mkdir(parents=True, exist_ok=True)
+
+    log_format = "%(asctime)s - %(levelname)s - %(message)s"
+    filename = str(Path(save_path) / 'run.log')
+
+    # Create a logger
+    logger = logging.getLogger()
+    logger.setLevel(log_level)
+
+    # Create file handler which logs even debug messages
+    fh = logging.FileHandler(filename, mode='a', delay=True)
+    fh.setLevel(logging.INFO)
+    fh.setFormatter(logging.Formatter(log_format))
+    logger.addHandler(fh)
+
+    # Create console handler with a higher log level
+    ch = logging.StreamHandler()
+    ch.setLevel(log_level)
+    ch.setFormatter(logging.Formatter(log_format))
+    logger.addHandler(ch)
+
+def process_data(params: dict):
+    """
+    This function is used to process the data and generate the graph.
+    """
+    edge_file = Path(
+        params['processed_data_path'],
+        params['dataset'], params['edge_path'])
+    x_file = Path(
+        params['processed_data_path'],
+        params['dataset'], params['x_path'])
+    edge_file.parent.mkdir(parents=True, exist_ok=True)
+
+    print("start to process {0} data"
+          "and generate graph".format(params['dataset']))
+    # Create the data loader according to the dataset
+    if params['dataset'] == 'wiki':
+        from dataset.wiki.loader import WikiLoader
+        loader = WikiLoader(params=params)
+
+    # Process the data and generate the graph
+    x, edge = loader.process_data()
+    print("finished {0} graph constructiong".format(params['dataset']))
+
+    # Save the graph
+    torch.save(x, x_file)
+    torch.save(edge, edge_file)
+    print("finished saving {0} graph".format(params['dataset']))
+
+
 def main(params):
     setup_seed(params['seed'])
-    save_path = params['result_path'] / params['dataset'] / params['model']
+    if params['mode'] == 'data':
+        save_path = Path(params['result_path'], params['dataset'])
+    else:
+        save_path = Path(
+            params['result_path'], params['dataset'], params['model'])
     save_path.mkdir(parents=True, exist_ok=True)
+    setup_logging(save_path)
+    logging.info(save_path)
+    if params['mode'] == 'data':
+        process_data(params)
+    elif params['mode'] == 'train':
+        from utils.train_test import Trainer
+        if params['model'] == 'dgnn':
+            from utils.dgnn_train import DGNNTrainer
+            trainer = DGNNTrainer(params, device=device)
+            trainer.train()
+            all_emb_df = pd.DataFrame([
+                {'node_id': k[0], 'edge_time': k[1], 'node_emb': v}
+                for k, v in trainer.node_emb_dict.items()
+            ])
+            # save node embeddings
+            all_emb_df.to_pickle(save_path / 'node_emb.pt')
+        else:
+            trainer = Trainer(params, device=device)
+            trainer.train()
+            logging.info('Training finished, start testing...')
+            trainer.test()
+        model_save_path = save_path / 'model.pt'
+        torch.save(trainer.model.state_dict(), model_save_path)
 
-    if params['mode'] == 'train':
-        trainer = Trainer(params, device=device)
-        trainer.train()
-
-    if params['model'] == 'dgnn':
-        emb_save_path = save_path / 'node_emb.pt'
-        torch.save(trainer.node_emb, emb_save_path)
-
-    model_save_path = save_path / 'model.pt'
-    torch.save(trainer.model.state_dict(), model_save_path)
+    elif params['mode'] == 'test' and params['model'] != 'dgnn':
+        from utils.train_test import Trainer
+        tester = Trainer(params, save_path=save_path, device=device)
+        tester.test()
 
 
 def setup_seed(seed):
@@ -45,9 +121,15 @@ def load_config(config_path):
 def get_params(args, config):
     # Merge default params with dataset-specific params
     params = {**config['default'], **config['datasets'][args.dataset]}
+    # add mode config
+    params['mode'] = str(args.mode)
 
     # If model argument is provided, merge model-specific params
-    params = {**params, **config['models'][args.model]}
+    if params['mode'] != 'data':
+        try:
+            params = {**params, **config['models'][args.model]}
+        except KeyError as e:
+            print(f"args model must be either 'dgnn', 'dgdcn'. Now it's: {e}")
 
     # Ensure paths are cross-platform compatible
     params['raw_data_path'] = Path(params['raw_data_path'])
@@ -57,17 +139,19 @@ def get_params(args, config):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Training and Testing TGSL.")
-    parser.add_argument('--dataset', type=str, choices=['yelp', 'wiki'],
-                        default='yelp', help='Which dataset to use.')
-    parser.add_argument('--mode', type=str,
-                        choices=['train', 'test'], default='train')
-    parser.add_argument('--model', type=str, choices=['dgnn', 'dgdcn'],
-                        default='dgnn', help='Which model to use.')
+    parser = argparse.ArgumentParser(
+        description="Training and Testing TGSL.")
+    parser.add_argument('--dataset', type=str, choices=['wiki', 'yelp'],
+                        default='wiki', help='Which dataset to use.')
+    parser.add_argument('--mode', type=str, choices=[
+        'train', 'test', 'data'], default='train')
+    parser.add_argument('--model', type=str, choices=[
+        'dgnn'], help='Which model to use.')
 
     args = parser.parse_args()
-
-    config = load_config('config.yaml')
+    config = load_config('./config.yaml')
     params = get_params(args, config)
-
-    main(params)
+    try:
+        main(params)
+    except Exception:
+        logging.exception("An error occurred!")

@@ -1,7 +1,7 @@
 from bisect import bisect_left, bisect_right
 import torch
 import torch.nn.functional as F
-from datasets import TemporalGraph
+from dataset import TemporalGraph
 
 
 class TemporalWalker:
