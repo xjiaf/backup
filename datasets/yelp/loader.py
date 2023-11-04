@@ -43,7 +43,7 @@ class YelpLoader:
         # if stars > 0 the label is 1 else 0
         review_df['label'] = review_df['label'].apply(lambda x: 1 if x >= 4 else 0)
 
-        # Create a mapping from user_id to a unique index starting from 0
+        # Create a mapping from user_id to a unique index starting from 0y
         user_map = review_df[['user_id']].drop_duplicates().reset_index(drop=True)
         user_map['user_index'] = user_map.index
         user_num_col = ["user_id", "user_index"] + list(self.params['sparse_features'])
