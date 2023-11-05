@@ -36,33 +36,22 @@ def setup_logging(save_path, log_level=logging.INFO):
     ch.setFormatter(logging.Formatter(log_format))
     logger.addHandler(ch)
 
-def process_data(params: dict):
+
+def download_data(params: dict):
     """
     This function is used to process the data and generate the graph.
     """
-    edge_file = Path(
-        params['processed_data_path'],
-        params['dataset'], params['edge_path'])
-    x_file = Path(
-        params['processed_data_path'],
-        params['dataset'], params['x_path'])
-    edge_file.parent.mkdir(parents=True, exist_ok=True)
+    from torch_geometric.datasets import JODIEDataset
 
-    print("start to process {0} data"
-          "and generate graph".format(params['dataset']))
-    # Create the data loader according to the dataset
-    if params['dataset'] == 'wiki':
-        from dataset.wiki.loader import WikiLoader
-        loader = WikiLoader(params=params)
+    # Set the path where data will be saved
+    path = params['data_path']
 
-    # Process the data and generate the graph
-    x, edge = loader.process_data()
-    print("finished {0} graph constructiong".format(params['dataset']))
+    # Create a list containing the names of all datasets to be downloaded
+    dataset_names = ["Reddit", "Wikipedia", "MOOC", "LastFM"]
 
-    # Save the graph
-    torch.save(x, x_file)
-    torch.save(edge, edge_file)
-    print("finished saving {0} graph".format(params['dataset']))
+    # Download each dataset by its name
+    for name in dataset_names:
+        _ = JODIEDataset(root=path, name=name)
 
 
 def main(params):
@@ -76,7 +65,7 @@ def main(params):
     setup_logging(save_path)
     logging.info(save_path)
     if params['mode'] == 'data':
-        process_data(params)
+        download_data(params)
     elif params['mode'] == 'train':
         from utils.train_test import Trainer
         if params['model'] == 'dgnn':
@@ -132,7 +121,7 @@ def get_params(args, config):
             print(f"args model must be either 'dgnn', 'dgdcn'. Now it's: {e}")
 
     # Ensure paths are cross-platform compatible
-    params['raw_data_path'] = Path(params['raw_data_path'])
+    params['data_path'] = Path(params['data_path'])
     params['processed_data_path'] = Path(params['processed_data_path'])
     params['result_path'] = Path(params['result_path'])
     return params
@@ -141,7 +130,8 @@ def get_params(args, config):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description="Training and Testing TGSL.")
-    parser.add_argument('--dataset', type=str, choices=['wiki', 'yelp'],
+    parser.add_argument('--dataset', type=str,
+                        choices=['wiki', 'reddit', 'mooc', 'lastfm'],
                         default='wiki', help='Which dataset to use.')
     parser.add_argument('--mode', type=str, choices=[
         'train', 'test', 'data'], default='train')

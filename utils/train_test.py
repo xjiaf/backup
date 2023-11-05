@@ -13,93 +13,95 @@ from torchmetrics.classification import (
     BinaryAUROC, BinaryF1Score, BinaryRecall)
 from torch_geometric.sampler import NeighborSampler, NegativeSampling
 from torch_geometric.loader import LinkLoader, LinkNeighborLoader
+from torch_geometric.datasets import JODIEDataset
+from torch_geometric.loader import TemporalDataLoader
 
-from dataset.temporal_graph import TemporalGraph
 from utils.early_stopping import EarlyStopping
 
 device = torch.device(
     "cuda:0" if torch.cuda.is_available() else "cpu")
+
 torch._dynamo.config.suppress_errors = True
 torch._dynamo.config.verbose = True
 
 
-class Dataset:
-    def __init__(self, params):
-        """
-        准备用dataloader的train_mask, val_mask, test_mask来淘汰这个类
-        """
-        self.params = params
-        # Load graph
+# class Dataset:
+#     def __init__(self, params):
+#         """
+#         准备用dataloader的train_mask, val_mask, test_mask来淘汰这个类
+#         """
+#         self.params = params
+#         # Load graph
 
-        x_path = (params['processed_data_path'] / params[
-            'dataset'] / params['x_file'])
-        x = torch.load(x_path)
-        train_edge, test_edge = self.train_test_split()
-        self.train = TemporalGraph(x=x, edge=train_edge)
-        self.test = TemporalGraph(x=x, edge=test_edge)
+#         x_path = (params['processed_data_path'] / params[
+#             'dataset'] / params['x_file'])
+#         x = torch.load(x_path)
+#         train_edge, test_edge = self.train_test_split()
+#         self.train = TemporalGraph(x=x, edge=train_edge)
+#         self.test = TemporalGraph(x=x, edge=test_edge)
 
-        # for induction
+#         # for induction
 
-    def train_test_split(self, test_size=0.2):
-        # 加载并排序数据
-        edge_path = Path(self.params['processed_data_path'],
-                         self.params['dataset'],
-                         self.params['edge_path'])
-        edge_index = torch.load(edge_path)
-        sorted_edge_index = edge_index[torch.argsort(edge_index[:, 2])]
+#     def train_test_split(self, test_size=0.2):
+#         # 加载并排序数据
+#         edge_path = Path(self.params['processed_data_path'],
+#                          self.params['dataset'],
+#                          self.params['edge_path'])
+#         edge_index = torch.load(edge_path)
+#         sorted_edge_index = edge_index[torch.argsort(edge_index[:, 2])]
 
-        # 划分训练和测试集
-        train_size = int((1-test_size) * sorted_edge_index.shape[0])
-        train_edges, test_edges = sorted_edge_index.split(
-            [train_size, len(sorted_edge_index) - train_size])
+#         # 划分训练和测试集
+#         train_size = int((1-test_size) * sorted_edge_index.shape[0])
+#         train_edges, test_edges = sorted_edge_index.split(
+#             [train_size, len(sorted_edge_index) - train_size])
 
-        # 获取训练数据中的节点
-        train_nodes_set = set(train_edges[:, :2].flatten().tolist())
+#         # 获取训练数据中的节点
+#         train_nodes_set = set(train_edges[:, :2].flatten().tolist())
 
-        # 使用集合运算快速分类测试边
-        is_transductive = [src in train_nodes_set and dst in
-                           train_nodes_set for src, dst, _ in test_edges]
-        transductive_mask = torch.tensor(is_transductive)
-        inductive_mask = ~transductive_mask
+#         # 使用集合运算快速分类测试边
+#         is_transductive = [src in train_nodes_set and dst in
+#                            train_nodes_set for src, dst, _ in test_edges]
+#         transductive_mask = torch.tensor(is_transductive)
+#         inductive_mask = ~transductive_mask
 
-        transductive_edges = test_edges[transductive_mask]
-        inductive_edges = test_edges[inductive_mask]
+#         transductive_edges = test_edges[transductive_mask]
+#         inductive_edges = test_edges[inductive_mask]
 
-    def get_train_loader(self):
-        print("get dataloader:", self.params['loader'])
-        if self.params['model'] == 'dgnn':
-            if self.params['loader'] == 'LinkNeighborLoader':
-                loader = LinkNeighborLoader(
-                    data=self.train,
-                    edge_label_index=self.train.edge_index,
-                    batch_size=self.params['batch_size'],
-                    num_neighbors=self.params[
-                        'num_neighbors'],
-                    neg_sampling=NegativeSampling(
-                        mode='triplet'),
-                    temporal_strategy='uniform',
-                    shuffle=self.params['shuffle'],
-                    neg_sampling_ratio=self.params[
-                        'neg_sampling_ratio'],
-                    num_workers=self.params['num_workers'],
-                    edge_label_time=self.train.edge_time,
-                    time_attr='edge_time')
-            elif self.params['loader'] == 'LinkLoader':
-                loader = LinkLoader(
-                    data=self.train,
-                    shuffle=self.params['shuffle'],
-                    neg_sampling=NegativeSampling(
-                        mode='triplet'),
-                    batch_size=self.params['batch_size'],
-                    neg_sampling_ratio=self.params[
-                        'neg_sampling_ratio'],
-                    num_workers=self.params['num_workers'],
-                    edge_label_time=self.train.edge_time,
-                    time_attr='edge_time')
-        return loader
+#     def get_train_loader(self):
+#         print("get dataloader:", self.params['loader'])
+#         if self.params['model'] == 'dgnn':
+#             if self.params['loader'] == 'LinkNeighborLoader':
+#                 loader = LinkNeighborLoader(
+#                     data=self.train,
+#                     edge_label_index=self.train.edge_index,
+#                     batch_size=self.params['batch_size'],
+#                     num_neighbors=self.params[
+#                         'num_neighbors'],
+#                     neg_sampling=NegativeSampling(
+#                         mode='triplet'),
+#                     temporal_strategy='uniform',
+#                     shuffle=self.params['shuffle'],
+#                     neg_sampling_ratio=self.params[
+#                         'neg_sampling_ratio'],
+#                     num_workers=self.params['num_workers'],
+#                     edge_label_time=self.train.edge_time,
+#                     time_attr='edge_time')
+#             elif self.params['loader'] == 'LinkLoader':
+#                 loader = LinkLoader(
+#                     data=self.train,
+#                     shuffle=self.params['shuffle'],
+#                     neg_sampling=NegativeSampling(
+#                         mode='triplet'),
+#                     batch_size=self.params['batch_size'],
+#                     neg_sampling_ratio=self.params[
+#                         'neg_sampling_ratio'],
+#                     num_workers=self.params['num_workers'],
+#                     edge_label_time=self.train.edge_time,
+#                     time_attr='edge_time')
+#         return loader
 
-    def get_test_loader(self):
-        pass
+#     def get_test_loader(self):
+#         pass
 
 
 class Trainer:
@@ -111,45 +113,38 @@ class Trainer:
                 'dataset'] / params['model'])
         else:
             self.save_path = save_path
-        # Load data
-        origin_edge_path = (params['processed_data_path'] / params[
-            'dataset'] / params['origin_edge_file'])
-        x_path = (params['processed_data_path'] / params[
-            'dataset'] / params['x_file'])
-        logging.info('start load graph')
-        self.graph = TemporalGraph(edge=origin_edge_path,
-                                   x=x_path,
-                                   directed=params['directed'])
 
         # Initialize
         self.writer = SummaryWriter(log_dir=self.save_path / 'logs')
-        self.criterion = nn.BCELoss().to(device)
+        self.criterion = torch.nn.BCEWithLogitsLoss().to(device)
         self.mean_loss = MeanMetric().to(device)
         self.metrics = MetricCollection(
             [BinaryAUROC(), BinaryF1Score(), BinaryRecall()]).to(device)
 
-    def create_loader(self, mode):
-        self.dataset = DataHandler(
-            self.params, mode=mode, val_size=self.val_size,
-            chunk_size=self.params['chunk_size'])
-        return DataLoader(
-            self.dataset,
-            pin_memory=True,
-            batch_size=self.params['batch_size'],
-            shuffle=True if mode == 'train' else False
-        )
-
-    @cached_property
-    def train_loader(self):
-        return self.create_loader('train')
-
-    @cached_property
-    def val_loader(self):
-        return self.create_loader('val')
-
-    @cached_property
-    def test_loader(self):
-        return self.create_loader('test')
+    def create_loader(self):
+        dataset = JODIEDataset(path, name='wikipedia')
+        data = dataset[0]
+        data = data.to(device)
+        train_data, val_data, test_data = data.train_val_test_split(
+            val_ratio=0.15, test_ratio=0.15)
+        train_loader = TemporalDataLoader(
+                            train_data,
+                            batch_size=200,
+                            neg_sampling_ratio=1.0,
+                            )
+        val_loader = TemporalDataLoader(
+                            val_data,
+                            batch_size=200,
+                            neg_sampling_ratio=1.0,
+                        )
+        test_loader = TemporalDataLoader(
+                            test_data,
+                            batch_size=200,
+                            neg_sampling_ratio=1.0,
+                        )
+        # neighbor_loader = LastNeighborLoader(
+        #     data.num_nodes, size=10, device=device)
+        return train_loader, val_loader, test_loader
 
     def init_model(self):
         """Initialize the model"""
@@ -230,7 +225,7 @@ class Trainer:
                     if batch_idx % 500 == 0:
                         logging.info(
                             f'Batch {batch_idx} train'
-                            'loss: {train_loss.item()}')
+                            f'loss: {train_loss.item()}')
                 del output, train_loss, batch
             else:
                 # Epoch finished and evaluate the model

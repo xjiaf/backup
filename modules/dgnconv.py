@@ -25,7 +25,7 @@ class DGNConv(MessagePassing):
 
         super().__init__(aggr=aggr)  # "Add" aggregation
         self.delta = Parameter(torch.tensor(1.0))
-        self.ln = nn.LayerNorm(1, elementwise_affine=True)  # Using LayerNorm here
+        self.ln = nn.LayerNorm(1, elementwise_affine=True)
         self.W_self = Linear(in_channels, out_channels,
                              weight_initializer="glorot",
                              bias_initializer=None)

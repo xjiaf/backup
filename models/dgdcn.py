@@ -1,34 +1,29 @@
-
 import torch
 from torch import nn, Tensor
 from torch_geometric.sampler import NeighborSampler, NodeSamplerInput
+from torch_geometric.nn.models import MLP
 
-from model.dgnn import DGNN
-from model.dcnn import DCNN
+from models.dgnn import DGNN
 from datasets.temporal_graph import TemporalGraph
 # from utils.temporal_walker import TemporalWalker
 
 
-class DGDCN(nn.Module):
+class DGNN(nn.Module):
     def __init__(self, params, graph_in_channels,
-                 graph_out_channels, dense_dim=0, sparse_dim=0,
-                 sparse_emb_dim=0,
-                 num_layers=2, mlp_dims=[128, 64]):
-        super(DGDCN, self).__init__()
+                 graph_out_channels, mlp_dims=[128, 64],
+                 dropout=0.3):
+        super().__init__()
         self.params = params
         self.dgnn = DGNN(params, in_channels=graph_in_channels,
                          out_channels=graph_out_channels)
-        self.dcnn = DCNN(params=params, dense_dim=(
-            graph_out_channels * params['hist_len'] + dense_dim),
-            sparse_dim=sparse_dim,
-            num_layers=num_layers,
-            sparse_emb_dim=sparse_emb_dim,
-            mlp_dims=mlp_dims)
+        self.mlp = MLP(channel_list=[graph_out_channels, *mlp_dims],
+                       dropout=dropout, act='relu', act_first=True,
+                       act_kwargs=None, norm='batch_norm',
+                       norm_kwargs=None, plain_last=True, bias=True)
 
     def forward(self, sampler: NeighborSampler, graph: TemporalGraph,
-                node_id: Tensor, node_time: Tensor,
-                dense_features: Tensor = None,
-                sparse_features: Tensor = None):
+                node_id: Tensor, node_time: Tensor):
+
         # Preprocess the input tensors
         device = node_id.device
         batch_size = node_id.size(0)
@@ -37,6 +32,7 @@ class DGDCN(nn.Module):
         flat_item_ids = torch.masked_select(node_id, valid_indices)
         flat_item_times = torch.masked_select(node_time, valid_indices)
         original_positions = torch.nonzero(valid_indices).squeeze(-1)[:, 0]
+        
         # Sample the neighborhood of the target node
         sampler_output = sampler.sample_from_nodes(
             NodeSamplerInput(input_id=None, node=flat_item_ids,
@@ -66,16 +62,9 @@ class DGDCN(nn.Module):
             target_node_emb, original_positions,
             batch_size, hist_len, device)
 
-        # Concatenate the node embedding with the features
-        if dense_features is not None:
-            dense_features = torch.cat(
-                (dense_features, target_node_emb), dim=1).float()
-        else:
-            dense_features = target_node_emb.float()
         # Input into DCN
-        y_pred = self.dcnn(dense_features=dense_features,
-                           sparse_features=sparse_features)
-
+        out = self.mlp(target_node_emb)
+        y_pred = torch.sigmoid(out)
         return y_pred
 
 
